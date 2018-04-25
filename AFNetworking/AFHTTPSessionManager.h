@@ -30,6 +30,9 @@
 #else
 #import <CoreServices/CoreServices.h>
 #endif
+/*
+ 这是注释的开始
+ */
 
 #import "AFURLSessionManager.h"
 
