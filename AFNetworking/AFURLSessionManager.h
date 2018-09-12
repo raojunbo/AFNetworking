@@ -325,6 +325,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// @name Setting Session Delegate Callbacks
 ///-----------------------------------------
 
+/*
+ 这种可以提供给外部配置的api设计，可以通过设置带返回值的
+ */
 /**
  Sets a block to be executed when the managed session becomes invalid, as handled by the `NSURLSessionDelegate` method `URLSession:didBecomeInvalidWithError:`.
 

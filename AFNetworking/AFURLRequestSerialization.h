@@ -112,6 +112,9 @@ typedef NS_ENUM(NSUInteger, AFHTTPRequestQueryStringSerializationStyle) {
 
  @see NSMutableURLRequest -setCachePolicy:
  */
+/*
+ 设置http头的Cahce-control
+ */
 @property (nonatomic, assign) NSURLRequestCachePolicy cachePolicy;
 
 /**
@@ -119,12 +122,20 @@ typedef NS_ENUM(NSUInteger, AFHTTPRequestQueryStringSerializationStyle) {
 
  @see NSMutableURLRequest -setHTTPShouldHandleCookies:
  */
+/*
+ 是否应该处理cookies
+ 比如服务器返回头里有Set-Cookie，客户端如果需要处理时，就会将这个cookies存起来。
+ 这个在webVIEW里经常使用，但在iOS的客户端里很少使用。因为这些值可以存在客户端的本地（这一点在浏览器里有点难，只能存在cookie里）
+ */
 @property (nonatomic, assign) BOOL HTTPShouldHandleCookies;
 
 /**
  Whether created requests can continue transmitting data before receiving a response from an earlier transmission. `NO` by default
 
  @see NSMutableURLRequest -setHTTPShouldUsePipelining:
+ */
+/*
+ pipeline链接是基于持久化链接的。将多个请求
  */
 @property (nonatomic, assign) BOOL HTTPShouldUsePipelining;
 
