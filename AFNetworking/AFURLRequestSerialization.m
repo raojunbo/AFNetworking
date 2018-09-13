@@ -172,6 +172,7 @@ NSArray * AFQueryStringPairsFromKeyAndValue(NSString *key, id value) {
 #pragma mark -
 
 static NSArray * AFHTTPRequestSerializerObservedKeyPaths() {
+    //AFHTTPRequest需要观察的值
     static NSArray *_AFHTTPRequestSerializerObservedKeyPaths = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
@@ -208,6 +209,7 @@ static void *AFHTTPRequestSerializerObserverContext = &AFHTTPRequestSerializerOb
     self.mutableHTTPRequestHeaders = [NSMutableDictionary dictionary];
     self.requestHeaderModificationQueue = dispatch_queue_create("requestHeaderModificationQueue", DISPATCH_QUEUE_CONCURRENT);
 
+    //设置http头的accept-language
     // Accept-Language HTTP Header; see http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.4
     NSMutableArray *acceptLanguagesComponents = [NSMutableArray array];
     [[NSLocale preferredLanguages] enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
@@ -217,6 +219,7 @@ static void *AFHTTPRequestSerializerObserverContext = &AFHTTPRequestSerializerOb
     }];
     [self setValue:[acceptLanguagesComponents componentsJoinedByString:@", "] forHTTPHeaderField:@"Accept-Language"];
 
+    //设置http头的userAgent
     NSString *userAgent = nil;
 #if TARGET_OS_IOS
     // User-Agent Header; see http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.43
@@ -240,6 +243,7 @@ static void *AFHTTPRequestSerializerObserverContext = &AFHTTPRequestSerializerOb
     // HTTP Method Definitions; see http://www.w3.org/Protocols/rfc2616/rfc2616-sec9.html
     self.HTTPMethodsEncodingParametersInURI = [NSSet setWithObjects:@"GET", @"HEAD", @"DELETE", nil];
 
+    
     self.mutableObservedChangedKeyPaths = [NSMutableSet set];
     for (NSString *keyPath in AFHTTPRequestSerializerObservedKeyPaths()) {
         if ([self respondsToSelector:NSSelectorFromString(keyPath)]) {
@@ -262,7 +266,13 @@ static void *AFHTTPRequestSerializerObserverContext = &AFHTTPRequestSerializerOb
 
 // Workarounds for crashing behavior using Key-Value Observing with XCTest
 // See https://github.com/AFNetworking/AFNetworking/issues/2523
-
+/*
+ 
+在这里特别注意kvo
+ 这里作者这样写我没有想清楚为什么？
+ 因为kvo是在addObservers的时候回去创建一个类。在新类上做文章。
+ 
+ */
 - (void)setAllowsCellularAccess:(BOOL)allowsCellularAccess {
     [self willChangeValueForKey:NSStringFromSelector(@selector(allowsCellularAccess))];
     _allowsCellularAccess = allowsCellularAccess;
@@ -328,6 +338,7 @@ forHTTPHeaderField:(NSString *)field
 - (void)setAuthorizationHeaderFieldWithUsername:(NSString *)username
                                        password:(NSString *)password
 {
+    //如果http设置里基本的授权方式。
     NSData *basicAuthCredentials = [[NSString stringWithFormat:@"%@:%@", username, password] dataUsingEncoding:NSUTF8StringEncoding];
     NSString *base64AuthCredentials = [basicAuthCredentials base64EncodedStringWithOptions:(NSDataBase64EncodingOptions)0];
     [self setValue:[NSString stringWithFormat:@"Basic %@", base64AuthCredentials] forHTTPHeaderField:@"Authorization"];
@@ -350,6 +361,8 @@ forHTTPHeaderField:(NSString *)field
     self.queryStringSerialization = block;
 }
 
+# pragma 前面这些值得监听都是为了防止外部在中途修改了这个配置信息，导致请求参数设置无效等问题。
+
 #pragma mark -
 
 - (NSMutableURLRequest *)requestWithMethod:(NSString *)method
@@ -366,7 +379,9 @@ forHTTPHeaderField:(NSString *)field
 
     NSMutableURLRequest *mutableRequest = [[NSMutableURLRequest alloc] initWithURL:url];
     mutableRequest.HTTPMethod = method;
-
+    //AFHTTPRequestSerializerObservedKeyPaths()里面是需要精听的
+    //mutableObservedChangedKeyPaths 是已经改变的
+    //将改变了的属性重新修改request里
     for (NSString *keyPath in AFHTTPRequestSerializerObservedKeyPaths()) {
         if ([self.mutableObservedChangedKeyPaths containsObject:keyPath]) {
             [mutableRequest setValue:[self valueForKeyPath:keyPath] forKey:keyPath];
@@ -378,6 +393,8 @@ forHTTPHeaderField:(NSString *)field
 	return mutableRequest;
 }
 
+
+//组装表单数据
 - (NSMutableURLRequest *)multipartFormRequestWithMethod:(NSString *)method
                                               URLString:(NSString *)URLString
                                              parameters:(NSDictionary *)parameters
@@ -392,6 +409,8 @@ forHTTPHeaderField:(NSString *)field
     __block AFStreamingMultipartFormData *formData = [[AFStreamingMultipartFormData alloc] initWithURLRequest:mutableRequest stringEncoding:NSUTF8StringEncoding];
 
     if (parameters) {
+        //将传进来的做为表单数据提交时
+        //这里就要去区别，表单数据的提交与普通数据的提交
         for (AFQueryStringPair *pair in AFQueryStringPairsFromDictionary(parameters)) {
             NSData *data = nil;
             if ([pair.value isKindOfClass:[NSData class]]) {
@@ -415,6 +434,9 @@ forHTTPHeaderField:(NSString *)field
     return [formData requestByFinalizingMultipartFormData];
 }
 
+
+//组装文件流数据
+#pragma  这里没看明白
 - (NSMutableURLRequest *)requestWithMultipartFormRequest:(NSURLRequest *)request
                              writingStreamContentsToFile:(NSURL *)fileURL
                                        completionHandler:(void (^)(NSError *error))handler
@@ -432,17 +454,17 @@ forHTTPHeaderField:(NSString *)field
 
         [inputStream open];
         [outputStream open];
-
+        //输入流有数据，输出流有剩余空间
         while ([inputStream hasBytesAvailable] && [outputStream hasSpaceAvailable]) {
             uint8_t buffer[1024];
 
-            NSInteger bytesRead = [inputStream read:buffer maxLength:1024];
-            if (inputStream.streamError || bytesRead < 0) {
+            NSInteger bytesRead = [inputStream read:buffer maxLength:1024];//读取1024个字节到缓冲
+            if (inputStream.streamError || bytesRead < 0) {//若果没有数据了
                 error = inputStream.streamError;
                 break;
             }
 
-            NSInteger bytesWritten = [outputStream write:buffer maxLength:(NSUInteger)bytesRead];
+            NSInteger bytesWritten = [outputStream write:buffer maxLength:(NSUInteger)bytesRead];//将缓冲区的数据写入outputStream
             if (outputStream.streamError || bytesWritten < 0) {
                 error = outputStream.streamError;
                 break;
@@ -654,6 +676,7 @@ NSTimeInterval const kAFUploadStream3GSuggestedDelay = 0.2;
 
 #pragma mark -
 
+//
 @interface AFStreamingMultipartFormData ()
 @property (readwrite, nonatomic, copy) NSMutableURLRequest *request;
 @property (readwrite, nonatomic, assign) NSStringEncoding stringEncoding;
@@ -827,6 +850,7 @@ NSTimeInterval const kAFUploadStream3GSuggestedDelay = 0.2;
     [self.bodyStream setInitialAndFinalBoundaries];
     [self.request setHTTPBodyStream:self.bodyStream];
 
+    //设置Content-Type
     [self.request setValue:[NSString stringWithFormat:@"multipart/form-data; boundary=%@", self.boundary] forHTTPHeaderField:@"Content-Type"];
     [self.request setValue:[NSString stringWithFormat:@"%llu", [self.bodyStream contentLength]] forHTTPHeaderField:@"Content-Length"];
 
